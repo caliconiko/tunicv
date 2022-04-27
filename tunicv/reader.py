@@ -12,14 +12,23 @@ class Reader:
         _, self.stroke = cv2.threshold(self.gray, 254, 255, cv2.THRESH_OTSU)
         self.distance_transformed = cv2.distanceTransform(self.stroke, cv2.DIST_L2, 0)
 
+        self.max_stroke = np.max(self.distance_transformed)
+
+        self.eroded_stroke = Reader.morph_func(self.stroke, cv2.erode, int(self.max_stroke/2))
+
         # double stroke dimensions
-        self.double_stroke = cv2.resize(self.stroke, (0, 0), fx=2, fy=2)
+        self.double_stroke = cv2.resize(self.eroded_stroke, (0, 0), fx=2, fy=2)
 
         self.skeletonized = Reader.skeletonize(self.double_stroke)
         # threshold again
         _, self.skeletonized = cv2.threshold(self.skeletonized, 254, 255, cv2.THRESH_OTSU)
+        # open skeleton
+        self.opened_skeleton = Reader.morph(self.skeletonized, kernel_size=2, morph=cv2.MORPH_OPEN)
+        # close skeleton
+        self.closed_skeleton = Reader.morph(self.skeletonized, kernel_size=3, morph=cv2.MORPH_CLOSE)
+        
 
-        cv2.imshow("Image", self.skeletonized)
+        cv2.imshow("Image", self.closed_skeleton)
         cv2.waitKey(0)
 
     # hat tip to https://gist.github.com/jsheedy/3913ab49d344fac4d02bcc887ba4277d
