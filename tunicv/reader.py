@@ -27,8 +27,12 @@ class Reader:
         # close skeleton
         self.closed_skeleton = Reader.morph(self.skeletonized, kernel_size=3, morph=cv2.MORPH_CLOSE)
         
+        hor_sum = cv2.normalize(np.average(self.closed_skeleton, axis=1), None, 0, 1, cv2.NORM_MINMAX)
+        
+        thick_hor_sum = cv2.resize(hor_sum, (0, 0), fx=100, fy=1)
 
-        cv2.imshow("Image", self.closed_skeleton)
+
+        cv2.imshow("Image", thick_hor_sum)
         cv2.waitKey(0)
 
     # hat tip to https://gist.github.com/jsheedy/3913ab49d344fac4d02bcc887ba4277d

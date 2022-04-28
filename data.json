@@ -1,0 +1,22 @@
+{
+    "words": [
+        {
+            "file": "fishing_1.png",
+            "translation": "fishing",
+            "syllables": 2,
+            "full": true
+        },
+        {
+            "file": "fishing_2.png",
+            "translation": "for",
+            "syllables": 1,
+            "full": true
+        },
+        {
+            "file": "fishing_3.png",
+            "translation": "fish",
+            "syllables": 1,
+            "full": true
+        }
+    ]
+}
