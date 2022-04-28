@@ -8,26 +8,26 @@ class Reader:
         self.image = cv2.imread(str(self.path))
 
     def read(self):
-        self.gray = cv2.cvtColor(self.image, cv2.COLOR_RGB2GRAY)
-        _, self.stroke = cv2.threshold(self.gray, 254, 255, cv2.THRESH_OTSU)
-        self.distance_transformed = cv2.distanceTransform(self.stroke, cv2.DIST_L2, 0)
+        gray = cv2.cvtColor(self.image, cv2.COLOR_RGB2GRAY)
+        _, stroke = cv2.threshold(gray, 254, 255, cv2.THRESH_OTSU)
+        distance_transformed = cv2.distanceTransform(stroke, cv2.DIST_L2, 0)
 
-        self.max_stroke = np.max(self.distance_transformed)
+        max_stroke = np.max(distance_transformed)
 
-        self.eroded_stroke = Reader.morph_func(self.stroke, cv2.erode, int(self.max_stroke/2))
+        eroded_stroke = Reader.morph_func(stroke, cv2.erode, int(max_stroke/2))
 
         # double stroke dimensions
-        self.double_stroke = cv2.resize(self.eroded_stroke, (0, 0), fx=2, fy=2)
+        double_stroke = cv2.resize(eroded_stroke, (0, 0), fx=2, fy=2)
 
-        self.skeletonized = Reader.skeletonize(self.double_stroke)
+        skeletonized = Reader.skeletonize(double_stroke)
         # threshold again
-        _, self.skeletonized = cv2.threshold(self.skeletonized, 254, 255, cv2.THRESH_OTSU)
+        _, skeletonized = cv2.threshold(skeletonized, 254, 255, cv2.THRESH_OTSU)
         # open skeleton
-        self.opened_skeleton = Reader.morph(self.skeletonized, kernel_size=2, morph=cv2.MORPH_OPEN)
+        opened_skeleton = Reader.morph(skeletonized, kernel_size=2, morph=cv2.MORPH_OPEN)
         # close skeleton
-        self.closed_skeleton = Reader.morph(self.skeletonized, kernel_size=3, morph=cv2.MORPH_CLOSE)
+        closed_skeleton = Reader.morph(skeletonized, kernel_size=3, morph=cv2.MORPH_CLOSE)
         
-        hor_sum = cv2.normalize(np.average(self.closed_skeleton, axis=1), None, 0, 1, cv2.NORM_MINMAX)
+        hor_sum = cv2.normalize(np.average(closed_skeleton, axis=1), None, 0, 1, cv2.NORM_MINMAX)
         
         thick_hor_sum = cv2.resize(hor_sum, (0, 0), fx=100, fy=1)
 
