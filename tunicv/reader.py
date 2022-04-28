@@ -1,3 +1,4 @@
+from pickletools import uint1
 import cv2
 import numpy as np
 
@@ -25,14 +26,24 @@ class Reader:
         # open skeleton
         opened_skeleton = Reader.morph(skeletonized, kernel_size=2, morph=cv2.MORPH_OPEN)
         # close skeleton
-        closed_skeleton = Reader.morph(skeletonized, kernel_size=3, morph=cv2.MORPH_CLOSE)
+        closed_skeleton = Reader.morph(skeletonized, kernel_size=5, morph=cv2.MORPH_CLOSE)
         
-        hor_sum = cv2.normalize(np.average(closed_skeleton, axis=1), None, 0, 1, cv2.NORM_MINMAX)
+        hor_avg = cv2.normalize(np.average(closed_skeleton, axis=1), None, 0, 1, cv2.NORM_MINMAX)
+        # threshold hor_sum
+        _, hor_sum_thresh = cv2.threshold(hor_avg, 0.5, 1, cv2.THRESH_BINARY)
+        # pad hor_sum_thresh
+        hor_sum_pad = np.pad(np.array(hor_sum_thresh, dtype=np.uint8), ((1, 1), (1, 1)), 'constant', constant_values=0)
+        # find contours
+        contours, _ = Reader.find_contours(hor_sum_pad)
+        for contour in contours:
+            # get bounding box
+            x, y, w, h = cv2.boundingRect(contour)
+            print(y+h/2)
         
-        thick_hor_sum = cv2.resize(hor_sum, (0, 0), fx=100, fy=1)
+        thick_hor_sum = cv2.resize(hor_sum_pad, (0, 0), fx=200, fy=1)
 
-
-        cv2.imshow("Image", thick_hor_sum)
+        print(np.where(hor_avg > 0.5))
+        cv2.imshow("Image", hor_sum_pad)
         cv2.waitKey(0)
 
     # hat tip to https://gist.github.com/jsheedy/3913ab49d344fac4d02bcc887ba4277d
