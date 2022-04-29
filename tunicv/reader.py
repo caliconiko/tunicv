@@ -1,7 +1,17 @@
+import enum
 from pickletools import uint1
 import cv2
 import numpy as np
 
+class Line:
+    """class to store data of a line"""
+    def __init__(self, skel_image:np.array, midline:int, topline:int, bottomline:int) -> None:
+        self.skel_image = skel_image
+        self.midline = midline
+        self.topline = topline  
+        self.bottomline = bottomline
+
+        self.skel_line = self.skel_image[self.topline:self.bottomline, :]
 
 class Reader:
     def __init__(self, path):
@@ -22,37 +32,63 @@ class Reader:
 
         RESCALE_FACTOR = 2
         # make image biggar
-        double_stroke = cv2.resize(eroded_stroke, (0, 0), fx=RESCALE_FACTOR, fy=RESCALE_FACTOR)
+        double_stroke = cv2.resize(stroke, (0, 0), fx=RESCALE_FACTOR, fy=RESCALE_FACTOR)
 
         # skelotonize to make it even thinner
         skeletonized = Reader.skeletonize(double_stroke)
         # threshold again just in case
         _, skeletonized = cv2.threshold(skeletonized, 254, 255, cv2.THRESH_OTSU)
         # get rid of holes
-        closed_skeleton = Reader.morph(skeletonized, kernel_size=5, morph=cv2.MORPH_CLOSE)
+        good_skeleton = Reader.morph(skeletonized, kernel_size=2, morph=cv2.MORPH_CLOSE, iterations=2)
         
-        # squish the image horizontally to find the lines
-        hor_avg = cv2.normalize(np.average(closed_skeleton, axis=1), None, 0, 1, cv2.NORM_MINMAX)
+        # squish the image vertically to find the lines
+        ver_avg = cv2.normalize(np.average(good_skeleton, axis=1), None, 0, 1, cv2.NORM_MINMAX)
         # binarize it just in case
-        _, hor_avg_thresh = cv2.threshold(hor_avg, 0.5, 1, cv2.THRESH_BINARY)
+        _, ver_avg_thresh = cv2.threshold(ver_avg, 0.3, 1, cv2.THRESH_BINARY)
         # pad margins to make the contours detectable
-        hor_avg_pad = np.pad(np.array(hor_avg_thresh, dtype=np.uint8), ((1, 1), (1, 1)), 'constant', constant_values=0)
-        # find contours
-        contours, _ = Reader.find_contours(hor_avg_pad)
+        ver_avg_pad = np.pad(np.array(ver_avg_thresh, dtype=np.uint8), ((1, 1), (1, 1)), 'constant', constant_values=0)
+        # find globs in vertical profile
+        contours, _ = Reader.find_contours(ver_avg_pad)
 
+        # store the coordinates of the lines
         line_ys = []
         for contour in contours:
             # get center of contour
             center = np.average(contour, axis=0)
             # store y part of center
-            line_ys.append(center[1])
+            line_ys.append(int(center[0][1]))
+        # sort the coordinates from smol to beeg
+        line_ys.sort()
+        
+        # get coordinates of the lines between the lines
+        between_ys = [(y+line_ys[i+1])//2 for i, y in enumerate(line_ys[:-1])]
+        between_ys.insert(0, 0)
+        between_ys.append(good_skeleton.shape[0]-1)
+
+        # store em into a list of objects
+        lines = []
+        for i, line_y in enumerate(line_ys):
+            line = Line(good_skeleton, line_y, between_ys[i], between_ys[i+1])
+            lines.append(line)
+
+        # show lines for debugging
+        for line in lines:
+            cv2.imshow('line', line.skel_line)
+            cv2.waitKey(100)
+
+        print(between_ys)
+        print(line_ys)
             
         # thick version of line finding to make it human visible
-        thick_hor_avg = cv2.resize(hor_avg_thresh, (0, 0), fx=200, fy=1)
+        thick_ver_avg = cv2.resize(ver_avg_thresh, (0, 0), fx=200, fy=1)
 
-        print(np.where(hor_avg > 0.5))
-        cv2.imshow("image", thick_hor_avg)
-        cv2.imshow("image1", closed_skeleton)
+        debug_visualization = cv2.cvtColor(double_stroke, cv2.COLOR_GRAY2BGR)
+        for b in between_ys:
+            cv2.line(debug_visualization, (0, b), (debug_visualization.shape[1], b), (255, 0, 255), 1)
+
+        cv2.imshow("image", thick_ver_avg)
+        cv2.imshow("image1", debug_visualization)
+        cv2.imshow("image2", good_skeleton)
         cv2.waitKey(0)
 
     # hat tip to https://gist.github.com/jsheedy/3913ab49d344fac4d02bcc887ba4277d
@@ -84,13 +120,13 @@ class Reader:
         return cv2.distanceTransform(img, dist_type, mask_size)
 
     @staticmethod
-    def morph(img, kernel_size=2, morph=cv2.MORPH_BLACKHAT):
+    def morph(img, kernel_size=2, morph=cv2.MORPH_BLACKHAT, iterations=1):
         kernel = np.ones((kernel_size,kernel_size),np.uint8)
-        return cv2.morphologyEx(img, morph, kernel)
+        return cv2.morphologyEx(img, morph, kernel, iterations=iterations)
 
     @staticmethod
-    def morph_func(img, func, kernel_size=2, iterations=1):
-        kernel = np.ones((kernel_size,kernel_size),np.uint8)
+    def morph_func(img, func, shape=cv2.MORPH_RECT, kernel_size=2, iterations=1):
+        kernel = cv2.getStructuringElement(shape, (kernel_size,kernel_size))
         return func(img, kernel, iterations=iterations)
 
     @staticmethod
