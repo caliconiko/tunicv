@@ -26,7 +26,11 @@
 
 This is a thing I'm making using opencv to read trunes. Currently unfinished though lol
 
-### Data JSON format
+### Data JSON 
+
+Maybe I'll use the json thing to mass test images.
+
+#### Format
 
 ```js
 {

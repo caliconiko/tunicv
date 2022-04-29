@@ -12,6 +12,11 @@ class Line:
         self.bottomline = bottomline
 
         self.skel_line = self.skel_image[self.topline:self.bottomline, :]
+        self.words = self.get_words()
+
+    def get_words(self):
+        squish_hor = np.average(self.skel_line, axis=1)
+        return squish_hor
 
 class Reader:
     def __init__(self, path):
@@ -71,10 +76,6 @@ class Reader:
             line = Line(good_skeleton, line_y, between_ys[i], between_ys[i+1])
             lines.append(line)
 
-        # show lines for debugging
-        for line in lines:
-            cv2.imshow('line', line.skel_line)
-            cv2.waitKey(100)
 
         print(between_ys)
         print(line_ys)
@@ -89,6 +90,11 @@ class Reader:
         cv2.imshow("image", thick_ver_avg)
         cv2.imshow("image1", debug_visualization)
         cv2.imshow("image2", good_skeleton)
+
+        # show lines for debugging
+        for line in lines:
+            cv2.imshow('line', line.words)
+            cv2.waitKey(500)
         cv2.waitKey(0)
 
     # hat tip to https://gist.github.com/jsheedy/3913ab49d344fac4d02bcc887ba4277d
