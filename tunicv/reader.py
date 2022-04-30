@@ -3,21 +3,6 @@ from pickletools import uint1
 import cv2
 import numpy as np
 
-class Line:
-    """class to store data of a line"""
-    def __init__(self, skel_image:np.array, midline:int, topline:int, bottomline:int) -> None:
-        self.skel_image = skel_image
-        self.midline = midline
-        self.topline = topline  
-        self.bottomline = bottomline
-
-        self.skel_line = self.skel_image[self.topline:self.bottomline, :]
-        self.words = self.get_words()
-
-    def get_words(self):
-        squish_hor = np.average(self.skel_line, axis=1)
-        return squish_hor
-
 class Reader:
     def __init__(self, path):
         self.path = path
@@ -61,7 +46,7 @@ class Reader:
             # get center of contour
             center = np.average(contour, axis=0)
             # store y part of center
-            line_ys.append(int(center[0][1]))
+            line_ys.append(int(center[0][1])-1)
         # sort the coordinates from smol to beeg
         line_ys.sort()
         
@@ -92,9 +77,10 @@ class Reader:
         cv2.imshow("image2", good_skeleton)
 
         # show lines for debugging
-        for line in lines:
+        for i, line in enumerate(lines):
             cv2.imshow('line', line.words)
-            cv2.waitKey(500)
+            print(i)
+            cv2.waitKey(0)
         cv2.waitKey(0)
 
     # hat tip to https://gist.github.com/jsheedy/3913ab49d344fac4d02bcc887ba4277d
@@ -144,3 +130,27 @@ class Reader:
         mask = np.zeros_like(img)
         cv2.drawContours(mask, cnts, -1, color, -1, cv2.LINE_AA)
         return mask
+
+class Line:
+    """class to store data of a line"""
+    def __init__(self, skel_image:np.array, midline:int, topline:int, bottomline:int) -> None:
+        self.skel_image = skel_image
+        self.midline = midline
+        self.topline = topline  
+        self.bottomline = bottomline
+
+        self.skel_line = self.skel_image[self.topline:self.bottomline, :]
+        self.words = self.get_words()
+
+    def get_words(self):
+        squish_hor = np.average(self.skel_line, axis=0)
+        _, squish_hor_thresh = cv2.threshold(squish_hor, 2, 255, cv2.THRESH_BINARY)
+
+        squish_hor_thresh_pad = np.pad(squish_hor_thresh, (1, 1), 'constant', constant_values=0)
+
+        contours = Reader.find_contours(squish_hor_thresh_pad)
+        words = []
+        for contour in contours:
+            pass
+        
+        return squish_hor_thresh_pad
