@@ -56,31 +56,29 @@ class Reader:
         between_ys.append(good_skeleton.shape[0]-1)
 
         # store em into a list of objects
-        lines = []
+        lines:list[Line] = []
         for i, line_y in enumerate(line_ys):
             line = Line(good_skeleton, line_y, between_ys[i], between_ys[i+1])
             lines.append(line)
-
-
-        print(between_ys)
-        print(line_ys)
-            
+  
         # thick version of line finding to make it human visible
         thick_ver_avg = cv2.resize(ver_avg_thresh, (0, 0), fx=200, fy=1)
 
-        debug_visualization = cv2.cvtColor(double_stroke, cv2.COLOR_GRAY2BGR)
-        for b in between_ys:
-            cv2.line(debug_visualization, (0, b), (debug_visualization.shape[1], b), (255, 0, 255), 1)
+        debug_stroke = cv2.cvtColor(double_stroke, cv2.COLOR_GRAY2BGR)
+        debug_skeleton = cv2.cvtColor(good_skeleton, cv2.COLOR_GRAY2BGR)
+        for l in lines:
+            cv2.line(debug_stroke, (0, l.bottomline), (debug_stroke.shape[1], l.bottomline), (255, 0, 255), 1)
+            cv2.line(debug_skeleton, (0, l.bottomline), (debug_stroke.shape[1], l.bottomline), (255, 0, 255), 1)
+            
+            for w in l.words:
+                cv2.rectangle(debug_stroke, (w.left, l.topline), (w.right, l.bottomline), (0, 255, 0), 1)
+                cv2.rectangle(debug_skeleton, (w.left, l.topline), (w.right, l.bottomline), (0, 255, 0), 1)
 
         cv2.imshow("image", thick_ver_avg)
-        cv2.imshow("image1", debug_visualization)
-        cv2.imshow("image2", good_skeleton)
+        cv2.imshow("image1", debug_stroke)
+        cv2.imshow("image2", debug_skeleton)
 
         # show lines for debugging
-        for i, line in enumerate(lines):
-            cv2.imshow('line', line.words)
-            print(i)
-            cv2.waitKey(0)
         cv2.waitKey(0)
 
     # hat tip to https://gist.github.com/jsheedy/3913ab49d344fac4d02bcc887ba4277d
@@ -143,14 +141,36 @@ class Line:
         self.words = self.get_words()
 
     def get_words(self):
+        # get horizontal profile of the line
         squish_hor = np.average(self.skel_line, axis=0)
         _, squish_hor_thresh = cv2.threshold(squish_hor, 2, 255, cv2.THRESH_BINARY)
 
-        squish_hor_thresh_pad = np.pad(squish_hor_thresh, (1, 1), 'constant', constant_values=0)
-
-        contours = Reader.find_contours(squish_hor_thresh_pad)
+        squish_hor_thresh_pad = np.pad(np.array(squish_hor_thresh, dtype=np.uint8), (1, 1), 'constant', constant_values=0)
+        # find globs in horizontal profile
+        contours, _ = Reader.find_contours(squish_hor_thresh_pad)
+        
         words = []
         for contour in contours:
-            pass
-        
-        return squish_hor_thresh_pad
+            contour = contour-np.array([[1, 1]])
+            # get span of contour
+            _, x1, _, w = cv2.boundingRect(contour)
+            x2 = x1+w
+
+            # get part of image included in span
+            midline_intersection = self.skel_image[self.midline, x1:x2]
+
+            if np.any(midline_intersection>0):
+                word = Word(self, x1, x2)
+                words.append(word)
+
+        return words[::-1]
+
+class Word:
+    """class to store data of a word"""
+    def __init__(self, line:Line, left:int, right:int) -> None:
+        self.line = line
+        self.left = left
+        self.right = right
+
+    def __repr__(self) -> str:
+        return f"{self.left}-{self.right}"
