@@ -14,6 +14,12 @@ def main():
         help="Path to the image"
     )
 
+    arg_parser.add_argument(
+        "scale",
+        type=float,
+        help="How much to scale image before reading"
+    )
+
     args = arg_parser.parse_args()
 
     path = Path(args.path)
@@ -21,5 +27,5 @@ def main():
     if not path.is_file():
         print("File doesn't exist")
     else:
-        reader = Reader(path)
+        reader = Reader(path, args.scale)
         reader.read()

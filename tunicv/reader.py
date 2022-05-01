@@ -4,33 +4,39 @@ import cv2
 import numpy as np
 
 class Reader:
-    def __init__(self, path):
+    def __init__(self, path, scale=1):
         self.path = path
         self.image = cv2.imread(str(self.path))
+
+        self.scale = scale
 
     def read(self):
         # gray scale it
         gray = cv2.cvtColor(self.image, cv2.COLOR_RGB2GRAY)
         # get only the writing
         _, stroke = cv2.threshold(gray, 254, 255, cv2.THRESH_OTSU)
+
+        # invert stroke if it is mostly white
+        if np.mean(stroke) > 128:
+            stroke = cv2.bitwise_not(stroke)
+
         # get stroke width of diffrent parts of image
         distance_transformed = cv2.distanceTransform(stroke, cv2.DIST_L2, 0)
         # get the max stroke width
-        max_stroke = np.max(distance_transformed)
+        max_stroke = int(np.max(distance_transformed))
         # make the writing as thin as possible without destroying it
-        eroded_stroke = Reader.morph_func(stroke, cv2.erode, int(max_stroke/2))
+        # eroded_stroke = Reader.morph_func(stroke, cv2.erode, int(max_stroke/2))
 
-        RESCALE_FACTOR = 2
         # make image biggar
-        double_stroke = cv2.resize(stroke, (0, 0), fx=RESCALE_FACTOR, fy=RESCALE_FACTOR)
+        scaled_stroke = cv2.resize(stroke, (0, 0), fx=self.scale, fy=self.scale)
 
         # skelotonize to make it even thinner
-        skeletonized = Reader.skeletonize(double_stroke)
+        skeletonized = Reader.skeletonize(scaled_stroke)
         # threshold again just in case
         _, skeletonized = cv2.threshold(skeletonized, 254, 255, cv2.THRESH_OTSU)
         # get rid of holes
-        good_skeleton = Reader.morph(skeletonized, kernel_size=2, morph=cv2.MORPH_CLOSE, iterations=2)
-        
+        good_skeleton = Reader.morph(skeletonized, kernel_size=max_stroke//2+2, morph=cv2.MORPH_CLOSE, iterations=2, shape=cv2.MORPH_ELLIPSE)
+
         # squish the image vertically to find the lines
         ver_avg = cv2.normalize(np.average(good_skeleton, axis=1), None, 0, 1, cv2.NORM_MINMAX)
         # binarize it just in case
@@ -58,13 +64,13 @@ class Reader:
         # store em into a list of objects
         lines:list[Line] = []
         for i, line_y in enumerate(line_ys):
-            line = Line(good_skeleton, line_y, between_ys[i], between_ys[i+1])
+            line = Line(good_skeleton, scaled_stroke, line_y, between_ys[i], between_ys[i+1])
             lines.append(line)
   
         # thick version of line finding to make it human visible
         thick_ver_avg = cv2.resize(ver_avg_thresh, (0, 0), fx=200, fy=1)
 
-        debug_stroke = cv2.cvtColor(double_stroke, cv2.COLOR_GRAY2BGR)
+        debug_stroke = cv2.cvtColor(scaled_stroke, cv2.COLOR_GRAY2BGR)
         debug_skeleton = cv2.cvtColor(good_skeleton, cv2.COLOR_GRAY2BGR)
         for l in lines:
             cv2.line(debug_stroke, (0, l.bottomline), (debug_stroke.shape[1], l.bottomline), (255, 0, 255), 1)
@@ -73,10 +79,16 @@ class Reader:
             for w in l.words:
                 cv2.rectangle(debug_stroke, (w.left, l.topline), (w.right, l.bottomline), (0, 255, 0), 1)
                 cv2.rectangle(debug_skeleton, (w.left, l.topline), (w.right, l.bottomline), (0, 255, 0), 1)
+        
+        sobely = cv2.Sobel(good_skeleton,cv2.CV_64F,0,1,ksize=5)
+        sobelx = cv2.Sobel(good_skeleton,cv2.CV_64F,1,0,ksize=5)
 
-        cv2.imshow("image", thick_ver_avg)
-        cv2.imshow("image1", debug_stroke)
-        cv2.imshow("image2", debug_skeleton)
+        print(f"{max_stroke=}")
+        cv2.imshow("lines", thick_ver_avg)
+        cv2.imshow("stroke", debug_stroke)
+        cv2.imshow("skeleton", debug_skeleton)
+        cv2.imshow("sobely", sobely)
+        cv2.imshow("sobelx", sobelx)
 
         # show lines for debugging
         cv2.waitKey(0)
@@ -110,8 +122,8 @@ class Reader:
         return cv2.distanceTransform(img, dist_type, mask_size)
 
     @staticmethod
-    def morph(img, kernel_size=2, morph=cv2.MORPH_BLACKHAT, iterations=1):
-        kernel = np.ones((kernel_size,kernel_size),np.uint8)
+    def morph(img, kernel_size=2, morph=cv2.MORPH_BLACKHAT, iterations=1, shape=cv2.MORPH_RECT):
+        kernel = cv2.getStructuringElement(shape, (kernel_size,kernel_size))
         return cv2.morphologyEx(img, morph, kernel, iterations=iterations)
 
     @staticmethod
@@ -131,18 +143,20 @@ class Reader:
 
 class Line:
     """class to store data of a line"""
-    def __init__(self, skel_image:np.array, midline:int, topline:int, bottomline:int) -> None:
+    def __init__(self, skel_image:np.array, stroke_image:np.array, midline:int, topline:int, bottomline:int) -> None:
         self.skel_image = skel_image
+        self.stroke_image = stroke_image
         self.midline = midline
         self.topline = topline  
         self.bottomline = bottomline
 
         self.skel_line = self.skel_image[self.topline:self.bottomline, :]
+        self.stroke_line = self.stroke_image[self.topline:self.bottomline, :]
         self.words = self.get_words()
 
     def get_words(self):
         # get horizontal profile of the line
-        squish_hor = np.average(self.skel_line, axis=0)
+        squish_hor = np.average(self.stroke_line, axis=0)
         _, squish_hor_thresh = cv2.threshold(squish_hor, 2, 255, cv2.THRESH_BINARY)
 
         squish_hor_thresh_pad = np.pad(np.array(squish_hor_thresh, dtype=np.uint8), (1, 1), 'constant', constant_values=0)
@@ -171,6 +185,8 @@ class Word:
         self.line = line
         self.left = left
         self.right = right
+
+        self.word_stroke = self.line.stroke_image[self.line.bottomline:self.line.topline, self.left:self.right]
 
     def __repr__(self) -> str:
         return f"{self.left}-{self.right}"
