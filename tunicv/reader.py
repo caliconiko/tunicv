@@ -1,5 +1,3 @@
-import enum
-from pickletools import uint1
 import cv2
 import numpy as np
 
@@ -80,8 +78,8 @@ class Reader:
                 cv2.rectangle(debug_stroke, (w.left, l.topline), (w.right, l.bottomline), (0, 255, 0), 1)
                 cv2.rectangle(debug_skeleton, (w.left, l.topline), (w.right, l.bottomline), (0, 255, 0), 1)
         
-        sobely = cv2.Sobel(good_skeleton,cv2.CV_64F,0,1,ksize=5)
-        sobelx = cv2.Sobel(good_skeleton,cv2.CV_64F,1,0,ksize=5)
+        sobely = cv2.Sobel(good_skeleton,cv2.CV_64F,0,1,ksize=3)
+        sobelx = cv2.Sobel(good_skeleton,cv2.CV_64F,1,0,ksize=3)
 
         print(f"{max_stroke=}")
         cv2.imshow("lines", thick_ver_avg)
